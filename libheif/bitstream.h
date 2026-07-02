@@ -206,13 +206,20 @@ public:
       }
     }
     else {
-      auto result = m_func_table->wait_for_file_size(end_pos, m_userdata);
+      // wait_for_file_size() takes a signed int64_t, so we cannot probe a position
+      // beyond INT64_MAX: it would wrap to a negative value and the reader would
+      // misreport the size. No file accessed through this API can be that large,
+      // so clamp the search range to INT64_MAX. (Callers may pass UINT64_MAX to
+      // ask for the total file size.)
+      uint64_t hi = std::min<uint64_t>(end_pos, std::numeric_limits<int64_t>::max());
+
+      auto result = m_func_table->wait_for_file_size(static_cast<int64_t>(hi), m_userdata);
       if (result == heif_reader_grow_status_size_reached) {
-        return end_pos;
+        return hi;
       }
       else {
         uint64_t pos = m_func_table->get_position(m_userdata);
-        return bisect_filesize(pos,end_pos);
+        return bisect_filesize(pos, hi);
       }
     }
   }
@@ -225,8 +232,10 @@ public:
       return mini;
     }
 
-    uint64_t pos = (mini + maxi) / 2;
-    auto result = m_func_table->wait_for_file_size(pos, m_userdata);
+    // Overflow-safe midpoint. 'maxi' is bounded by INT64_MAX (see request_range),
+    // but computing (mini + maxi) directly could still overflow uint64_t.
+    uint64_t pos = mini + (maxi - mini) / 2;
+    auto result = m_func_table->wait_for_file_size(static_cast<int64_t>(pos), m_userdata);
     if (result == heif_reader_grow_status_size_reached) {
       return bisect_filesize(pos, maxi);
     }
