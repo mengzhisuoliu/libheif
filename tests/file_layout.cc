@@ -60,4 +60,14 @@ TEST_CASE("meta box with size 0 (extends to end of file)") {
 
   REQUIRE(err.error_code == heif_error_Ok);
   REQUIRE(file.get_meta_box() != nullptr);
+
+  // The resolved 'meta' box must yield the correct image metadata. Read the
+  // file through the high-level API and check the primary image dimensions.
+  // These come from the 'ispe' box, so no AV1 decoder is required.
+  heif_context* context = get_context_for_test_file("meta_size_zero.avif");
+  heif_image_handle* handle = get_primary_image_handle(context);
+  REQUIRE(heif_image_handle_get_ispe_width(handle) == 33);
+  REQUIRE(heif_image_handle_get_ispe_height(handle) == 11);
+  heif_image_handle_release(handle);
+  heif_context_free(context);
 }
